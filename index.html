@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Restaurant Digital Menu</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#111a3d;color:#fff}
+.app{width:100%;max-width:1050px;margin:auto;padding:18px}
+header,.card{background:#1c2754;border-radius:18px;padding:22px;margin-bottom:16px}
+header h1{margin:0 0 6px;font-size:30px}
+header p,.note{margin:0;color:#cbd0e9}
+label{display:block;font-size:17px;font-weight:700;margin-bottom:9px}
+select,input{width:100%;padding:14px;border:1px solid #6670a5;border-radius:12px;background:#121b40;color:#fff;font-size:16px}
+.note{font-size:14px;margin-top:10px}
+h2{margin:0 0 18px;font-size:25px}
+.menu{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.item{background:#5969bd;border-radius:16px;padding:18px;min-height:175px;display:flex;flex-direction:column;justify-content:space-between}
+.item h3{margin:0;font-size:20px}
+.price{font-size:18px;font-weight:700;margin:12px 0}
+button{border:0;border-radius:10px;background:#ffe12b;color:#202020;font-size:16px;font-weight:700;padding:12px 22px;cursor:pointer;width:max-content}
+.cart-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #394574}
+.remove{padding:7px 12px;font-size:13px}
+.total{font-size:21px;font-weight:700;margin:18px 0}
+.place{width:100%;font-size:18px;padding:15px}
+#message{text-align:center;margin-top:13px;font-weight:700}
+@media(max-width:600px){
+.app{padding:12px} header,.card{padding:18px;border-radius:16px}
+h1{font-size:26px}.menu{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.item{padding:15px;min-height:155px}.item h3{font-size:18px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<header>
+<h1>Restaurant Digital Menu</h1>
+<p>Order directly from your table</p>
+</header>
+
+<div class="card">
+<label>Table</label>
+<select id="table">
+<option value="1">Table 1</option>
+<option value="2">Table 2</option>
+<option value="3">Table 3</option>
+<option value="4">Table 4</option>
+<option value="5">Table 5</option>
+</select>
+<p class="note">Your table is identified automatically when you scan the QR code.</p>
+</div>
+
+<div class="card">
+<label for="customerName">Customer Name</label>
+<input id="customerName" type="text" placeholder="Enter your name">
+</div>
+
+<div class="card">
+<h2>Menu</h2>
+<div class="menu">
+
+<div class="item"><h3>Veg Burger</h3><div class="price">₹129</div><button onclick="addItem('Veg Burger',129)">Add</button></div>
+<div class="item"><h3>Pizza</h3><div class="price">₹199</div><button onclick="addItem('Pizza',199)">Add</button></div>
+<div class="item"><h3>French Fries</h3><div class="price">₹89</div><button onclick="addItem('French Fries',89)">Add</button></div>
+<div class="item"><h3>Biryani</h3><div class="price">₹249</div><button onclick="addItem('Biryani',249)">Add</button></div>
+<div class="item"><h3>Cold Drink</h3><div class="price">₹50</div><button onclick="addItem('Cold Drink',50)">Add</button></div>
+<div class="item"><h3>Ice Cream</h3><div class="price">₹99</div><button onclick="addItem('Ice Cream',99)">Add</button></div>
+
+</div>
+</div>
+
+<div class="card">
+<h2>Cart</h2>
+<div id="cart">Cart empty</div>
+<div class="total">Total: ₹<span id="total">0</span></div>
+<button class="place" id="placeButton" onclick="placeOrder()">Place Order</button>
+<div id="message"></div>
+</div>
+
+</div>
+
+<script>
+const API_URL="https://script.google.com/macros/s/AKfycbz2JOl6OJ99iha5szGccglntfRAqKpDaPerVaGyBgnjYJzgvJZ5_-YOc12aps8bziA/exec";
+
+let cart=[];
+
+const params=new URLSearchParams(window.location.search);
+const qrTable=params.get("table");
+
+if(qrTable){
+  document.getElementById("table").value=qrTable;
+  document.getElementById("table").disabled=true;
+}
+
+function addItem(name,price){
+  const existing=cart.find(item=>item.name===name);
+  if(existing){existing.qty++}
+  else{cart.push({name,price,qty:1})}
+  renderCart();
+}
+
+function removeItem(index){
+  cart.splice(index,1);
+  renderCart();
+}
+
+function renderCart(){
+  const box=document.getElementById("cart");
+  if(!cart.length){
+    box.textContent="Cart empty";
+    document.getElementById("total").textContent="0";
+    return;
+  }
+
+  let total=0;
+  box.innerHTML="";
+
+  cart.forEach((item,index)=>{
+    total+=item.price*item.qty;
+    const row=document.createElement("div");
+    row.className="cart-row";
+    row.innerHTML=
+      "<span>"+item.name+" × "+item.qty+"</span>"+
+      "<span>₹"+(item.price*item.qty)+
+      ' <button class="remove" onclick="removeItem('+index+')">Remove</button></span>';
+    box.appendChild(row);
+  });
+
+  document.getElementById("total").textContent=total;
+}
+
+async function placeOrder(){
+  const name=document.getElementById("customerName").value.trim();
+  const table=document.getElementById("table").value;
+  const message=document.getElementById("message");
+  const button=document.getElementById("placeButton");
+
+  if(!name){
+    message.textContent="Please enter customer name.";
+    return;
+  }
+
+  if(!cart.length){
+    message.textContent="Please add at least one item.";
+    return;
+  }
+
+  const total=cart.reduce((sum,item)=>sum+(item.price*item.qty),0);
+
+  const order={
+    table:table,
+    customerName:name,
+    items:cart,
+    total:total
+  };
+
+  button.disabled=true;
+  button.textContent="Placing Order...";
+  message.textContent="Sending order...";
+
+  try{
+    const response=await fetch(API_URL,{
+      method:"POST",
+      body:JSON.stringify(order)
+    });
+
+    const result=await response.json();
+
+    if(result.success){
+      message.textContent="Order placed successfully! Order ID: "+result.orderId;
+      cart=[];
+      renderCart();
+      document.getElementById("customerName").value="";
+    }else{
+      throw new Error(result.message||"Order failed");
+    }
+  }catch(error){
+    message.textContent="Order could not be sent. Please try again.";
+    console.error(error);
+  }finally{
+    button.disabled=false;
+    button.textContent="Place Order";
+  }
+}
+
+renderCart();
+</script>
+</body>
+</html>
