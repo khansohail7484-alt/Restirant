@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Waiter Dashboard</title>
+
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+    }
+
+    body {
+      background: #071426;
+      color: white;
+      min-height: 100vh;
+    }
+
+    .container {
+      width: 94%;
+      max-width: 700px;
+      margin: auto;
+      padding: 20px 0 40px;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .card {
+      background: #102b4b;
+      padding: 18px;
+      border-radius: 15px;
+      margin-bottom: 18px;
+    }
+
+    .card h2 {
+      margin-bottom: 15px;
+    }
+
+    #reader {
+      width: 100%;
+      background: white;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .button {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 9px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+
+    .scan-btn {
+      background: #ffd43b;
+      color: #111;
+    }
+
+    .complete-btn {
+      background: #22c55e;
+      color: white;
+    }
+
+    .refresh-btn {
+      background: #3b82f6;
+      color: white;
+    }
+
+    .order {
+      background: #163d65;
+      padding: 15px;
+      border-radius: 12px;
+    }
+
+    .order-row {
+      padding: 8px 0;
+      border-bottom: 1px solid #31577c;
+    }
+
+    .order-row:last-child {
+      border-bottom: none;
+    }
+
+    .label {
+      color: #9fc5e8;
+      font-size: 14px;
+    }
+
+    .value {
+      font-size: 18px;
+      font-weight: bold;
+      margin-top: 3px;
+    }
+
+    .status {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 20px;
+      background: #ffd43b;
+      color: #111;
+      font-weight: bold;
+    }
+
+    .message {
+      display: none;
+      padding: 12px;
+      border-radius: 8px;
+      background: #163d65;
+      margin-top: 12px;
+    }
+
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <h1>👨‍🍳 Waiter Dashboard</h1>
+
+  <div class="card">
+    <h2>📷 Scan Table QR</h2>
+
+    <div id="reader"></div>
+
+    <button class="button scan-btn" onclick="startScanner()">
+      Start Scanner
+    </button>
+
+    <div id="scannerMessage" class="message"></div>
+  </div>
+
+
+  <div id="orderCard" class="card hidden">
+
+    <h2>📋 Active Order</h2>
+
+    <div class="order">
+
+      <div class="order-row">
+        <div class="label">Order ID</div>
+        <div id="orderId" class="value"></div>
+      </div>
+
+      <div class="order-row">
+        <div class="label">Table</div>
+        <div id="table" class="value"></div>
+      </div>
+
+      <div class="order-row">
+        <div class="label">Customer</div>
+        <div id="customerName" class="value"></div>
+      </div>
+
+      <div class="order-row">
+        <div class="label">Items</div>
+        <div id="items" class="value"></div>
+      </div>
+
+      <div class="order-row">
+        <div class="label">Total</div>
+        <div id="total" class="value"></div>
+      </div>
+
+      <div class="order-row">
+        <div class="label">Status</div>
+        <div style="margin-top:6px;">
+          <span id="status" class="status"></span>
+        </div>
+      </div>
+
+    </div>
+
+    <button class="button complete-btn" onclick="completeOrder()">
+      ✅ Complete Order
+    </button>
+
+    <button class="button refresh-btn" onclick="refreshOrder()">
+      🔄 Refresh Order
+    </button>
+
+    <div id="orderMessage" class="message"></div>
+
+  </div>
+
+</div>
+
+
+<script>
+
+const API_URL =
+"https://script.google.com/macros/s/AKfycbz2JOl6OJ99iha5szGccglntfRAqKpDaPerVaGyBgnjYJzgvJZ5_-YOc12aps8bziA/exec";
+
+let scanner = null;
+let currentTable = "";
+let currentOrderId = "";
+
+
+function startScanner() {
+
+  if (scanner) {
+    return;
+  }
+
+  scanner = new Html5Qrcode("reader");
+
+  scanner.start(
+    { facingMode: "environment" },
+    {
+      fps: 10,
+      qrbox: {
+        width: 250,
+        height: 250
+      }
+    },
+    onScanSuccess,
+    onScanError
+  )
+  .catch(function(error) {
+
+    showScannerMessage(
+      "❌ Camera start nahi ho paya. Camera permission allow karo."
+    );
+
+  });
+
+}
+
+
+function onScanSuccess(decodedText) {
+
+  console.log("QR:", decodedText);
+
+  let table = getTableFromQR(decodedText);
+
+  if (!table) {
+
+    showScannerMessage(
+      "❌ Ye valid restaurant table QR nahi hai."
+    );
+
+    return;
+  }
+
+  currentTable = table;
+
+  showScannerMessage(
+    "✅ Table " + table + " scanned."
+  );
+
+  stopScanner();
+
+  getOrder(table);
+}
+
+
+function getTableFromQR(qrText) {
+
+  try {
+
+    const url = new URL(qrText);
+
+    const table = url.searchParams.get("table");
+
+    if (table) {
+      return table;
+    }
+
+  } catch (error) {
+
+    if (/^\d+$/.test(qrText.trim())) {
+      return qrText.trim();
+    }
+
+  }
+
+  return null;
+}
+
+
+function stopScanner() {
+
+  if (!scanner) {
+    return;
+  }
+
+  scanner.stop()
+    .then(function() {
+
+      scanner.clear();
+      scanner = null;
+
+    })
+    .catch(function(error) {
+
+      console.log(error);
+      scanner = null;
+
+    });
+
+}
+
+
+async function getOrder(table) {
+
+  showOrderMessage(
+    "⏳ Order check ho raha hai..."
+  );
+
+  try {
+
+    const url =
+      API_URL +
+      "?action=getOrder&table=" +
+      encodeURIComponent(table);
+
+    const response = await fetch(url);
+
+    const result = await response.json();
+
+    if (
+      result.success &&
+      result.found &&
+      result.order
+    ) {
+
+      displayOrder(result.order);
+
+    } else {
+
+      hideOrder();
+
+      showOrderMessage(
+        "ℹ️ Table " +
+        table +
+        " ke liye koi active order nahi hai."
+      );
+
+    }
+
+  } catch (error) {
+
+    console.error(error);
+
+    showOrderMessage(
+      "❌ Order load nahi ho paya."
+    );
+
+  }
+
+}
+
+
+function displayOrder(order) {
+
+  currentOrderId = order.orderId;
+
+  document.getElementById("orderId").innerText =
+    order.orderId;
+
+  document.getElementById("table").innerText =
+    "Table " + order.table;
+
+  document.getElementById("customerName").innerText =
+    order.customerName;
+
+  document.getElementById("items").innerText =
+    order.items;
+
+  document.getElementById("total").innerText =
+    "₹" + order.total;
+
+  document.getElementById("status").innerText =
+    order.status;
+
+  document.getElementById("orderCard")
+    .classList.remove("hidden");
+
+  hideOrderMessage();
+}
+
+
+function refreshOrder() {
+
+  if (!currentTable) {
+
+    alert("Pehle table QR scan karo.");
+
+    return;
+  }
+
+  getOrder(currentTable);
+}
+
+
+async function completeOrder() {
+
+  if (!currentOrderId) {
+
+    alert("Koi active order nahi hai.");
+
+    return;
+  }
+
+  const confirmComplete =
+    confirm(
+      "Kya aap Order " +
+      currentOrderId +
+      " ko complete karna chahte ho?"
+    );
+
+  if (!confirmComplete) {
+    return;
+  }
+
+  showOrderMessage(
+    "⏳ Order complete ho raha hai..."
+  );
+
+  try {
+
+    const response = await fetch(
+      API_URL,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          action: "completeOrder",
+          orderId: currentOrderId
+        })
+      }
+    );
+
+    const result = await response.json();
+
+    if (result.success) {
+
+      document.getElementById("status")
+        .innerText = "Completed";
+
+      showOrderMessage(
+        "✅ Order completed successfully!"
+      );
+
+      currentOrderId = "";
+
+      setTimeout(function() {
+
+        hideOrder();
+
+        showScannerMessage(
+          "📷 Ready for next table."
+        );
+
+      }, 1500);
+
+    } else {
+
+      showOrderMessage(
+        "❌ " + result.message
+      );
+
+    }
+
+  } catch (error) {
+
+    console.error(error);
+
+    showOrderMessage(
+      "❌ Order complete nahi ho paya."
+    );
+
+  }
+
+}
+
+
+function hideOrder() {
+
+  document.getElementById("orderCard")
+    .classList.add("hidden");
+
+}
+
+
+function showScannerMessage(text) {
+
+  const box =
+    document.getElementById("scannerMessage");
+
+  box.style.display = "block";
+  box.innerText = text;
+
+}
+
+
+function showOrderMessage(text) {
+
+  const box =
+    document.getElementById("orderMessage");
+
+  box.style.display = "block";
+  box.innerText = text;
+
+}
+
+
+function hideOrderMessage() {
+
+  document.getElementById("orderMessage")
+    .style.display = "none";
+
+}
+
+
+function onScanError(errorMessage) {
+  // Ignore normal scanner errors
+}
+
+</script>
+
+</body>
+</html>
